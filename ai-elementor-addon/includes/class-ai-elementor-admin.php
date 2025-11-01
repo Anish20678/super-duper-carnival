@@ -108,9 +108,7 @@ class Admin {
             $input = [];
         }
 
-        Settings::update_settings( $input );
-
-        return Settings::get_settings();
+        return Settings::sanitize_settings_array( $input );
     }
 
     /**
