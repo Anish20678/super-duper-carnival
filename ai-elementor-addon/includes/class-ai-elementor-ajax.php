@@ -24,9 +24,10 @@ class Ajax {
     public static function handle_generate() {
         check_ajax_referer( 'ai-elementor-addon', 'nonce' );
 
-        $payload = isset( $_POST['payload'] ) ? wp_unslash( $_POST['payload'] ) : '';
-        $mode    = isset( $_POST['mode'] ) ? sanitize_key( wp_unslash( $_POST['mode'] ) ) : 'chat';
-        $model   = isset( $_POST['model'] ) ? sanitize_text_field( wp_unslash( $_POST['model'] ) ) : '';
+        $payload     = isset( $_POST['payload'] ) ? wp_unslash( $_POST['payload'] ) : '';
+        $mode        = isset( $_POST['mode'] ) ? sanitize_key( wp_unslash( $_POST['mode'] ) ) : 'chat';
+        $model       = isset( $_POST['model'] ) ? sanitize_text_field( wp_unslash( $_POST['model'] ) ) : '';
+        $temperature = isset( $_POST['temperature'] ) ? floatval( wp_unslash( $_POST['temperature'] ) ) : null;
 
         if ( empty( $payload ) ) {
             wp_send_json_error( [ 'message' => __( 'No prompt provided.', 'ai-elementor-addon' ) ] );
@@ -40,7 +41,8 @@ class Ajax {
 
         $model = $model ?: $config['default_model'];
 
-        $prompt = self::build_prompt( $mode, $payload );
+        $prompt      = self::build_prompt( $mode, $payload );
+        $temperature = null !== $temperature ? max( 0, min( 2, $temperature ) ) : null;
 
         $response = wp_remote_post(
             'https://api.openai.com/v1/responses',
@@ -54,6 +56,7 @@ class Ajax {
                         'model'   => $model,
                         'input'   => $prompt,
                         'max_output_tokens' => 800,
+                        'temperature' => null !== $temperature ? $temperature : 0.7,
                     ]
                 ),
                 'timeout' => 45,
