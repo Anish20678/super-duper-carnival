@@ -1,0 +1,74 @@
+.ai-chat-widget,
+.ai-brainstorm-widget,
+.ai-image-prompt-widget {
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 12px;
+    padding: 20px;
+    background: #ffffff;
+    box-shadow: 0 10px 25px rgba(18,38,63,0.05);
+    font-family: inherit;
+}
+
+.ai-chat-window {
+    min-height: 160px;
+    max-height: 320px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(0,0,0,0.02);
+}
+
+.ai-chat-bubble {
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    background: #f0f4ff;
+}
+
+.ai-chat-bubble--assistant {
+    background: linear-gradient(135deg, #3a7bd5 0%, #00d2ff 100%);
+    color: #ffffff;
+}
+
+.ai-chat-input textarea {
+    width: 100%;
+    min-height: 70px;
+    margin-bottom: 8px;
+}
+
+.ai-chat-send,
+.ai-brainstorm-generate,
+.ai-image-prompt-generate {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    border-radius: 999px;
+    background: #1a73e8;
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+}
+
+.ai-brainstorm-widget input,
+.ai-image-prompt-widget input,
+.ai-image-prompt-widget textarea {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.1);
+    padding: 10px;
+    margin-bottom: 12px;
+}
+
+.ai-image-prompt-attributes label {
+    display: block;
+    font-weight: 600;
+}
+
+.ai-brainstorm-output,
+.ai-image-prompt-output {
+    margin-top: 16px;
+    border-radius: 8px;
+    background: rgba(17, 24, 39, 0.05);
+    padding: 12px;
+    min-height: 60px;
+}
