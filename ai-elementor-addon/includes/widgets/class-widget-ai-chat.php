@@ -130,6 +130,17 @@ class AI_Chat_Widget extends Widget_Base {
         );
 
         $this->add_control(
+            'inactivity_message',
+            [
+                'label'       => __( 'Inactivity Message', 'ai-elementor-addon' ),
+                'type'        => Controls_Manager::TEXTAREA,
+                'rows'        => 3,
+                'default'     => __( 'The chat session expired due to inactivity. Starting a new conversation.', 'ai-elementor-addon' ),
+                'description' => __( 'Displayed when the visitor returns after a session timeout (7 minutes of inactivity).', 'ai-elementor-addon' ),
+            ]
+        );
+
+        $this->add_control(
             'enter_to_send',
             [
                 'label'        => __( 'Send On Enter', 'ai-elementor-addon' ),
@@ -204,7 +215,7 @@ class AI_Chat_Widget extends Widget_Base {
         $this->add_control(
             'chat_window_height',
             [
-                'label' => __( 'Chat Window Height', 'ai-elementor-addon' ),
+                'label' => __( 'Chat Window Max Height', 'ai-elementor-addon' ),
                 'type'  => Controls_Manager::SLIDER,
                 'range' => [
                     'px' => [ 'min' => 160, 'max' => 640 ],
@@ -212,6 +223,35 @@ class AI_Chat_Widget extends Widget_Base {
                 'selectors' => [
                     '{{WRAPPER}} .ai-chat-window' => 'max-height: {{SIZE}}{{UNIT}};',
                 ],
+            ]
+        );
+
+        $this->add_control(
+            'chat_window_min_height',
+            [
+                'label' => __( 'Chat Window Min Height', 'ai-elementor-addon' ),
+                'type'  => Controls_Manager::SLIDER,
+                'range' => [
+                    'px' => [ 'min' => 120, 'max' => 640 ],
+                ],
+                'selectors' => [
+                    '{{WRAPPER}} .ai-chat-window' => 'min-height: {{SIZE}}{{UNIT}};',
+                ],
+            ]
+        );
+
+        $this->add_control(
+            'chat_window_fixed_height',
+            [
+                'label'       => __( 'Fixed Chat Height', 'ai-elementor-addon' ),
+                'type'        => Controls_Manager::SLIDER,
+                'range'       => [
+                    'px' => [ 'min' => 160, 'max' => 800 ],
+                ],
+                'selectors'   => [
+                    '{{WRAPPER}} .ai-chat-window' => 'height: {{SIZE}}{{UNIT}};',
+                ],
+                'description' => __( 'Sets an explicit height for the chat area when required.', 'ai-elementor-addon' ),
             ]
         );
 
@@ -451,16 +491,20 @@ class AI_Chat_Widget extends Widget_Base {
         }
 
         $data = [
-            'model'        => $configuration['default_model'],
-            'temperature'  => isset( $settings['temperature']['size'] ) ? (float) $settings['temperature']['size'] : 0.6,
-            'prompt'       => $settings['prompt_context'],
-            'enterToSend'  => isset( $settings['enter_to_send'] ) && 'yes' === $settings['enter_to_send'],
-            'quickPrompts' => array_values( $quick_prompts ),
-            'autoSend'     => isset( $settings['auto_send_quick_prompt'] ) && 'yes' === $settings['auto_send_quick_prompt'],
-            'typingText'   => $settings['typing_indicator'],
+            'model'             => $configuration['default_model'],
+            'temperature'       => isset( $settings['temperature']['size'] ) ? (float) $settings['temperature']['size'] : 0.6,
+            'prompt'            => $settings['prompt_context'],
+            'enterToSend'       => isset( $settings['enter_to_send'] ) && 'yes' === $settings['enter_to_send'],
+            'quickPrompts'      => array_values( $quick_prompts ),
+            'autoSend'          => isset( $settings['auto_send_quick_prompt'] ) && 'yes' === $settings['auto_send_quick_prompt'],
+            'typingText'        => $settings['typing_indicator'],
+            'widgetId'          => $this->get_id(),
+            'welcomeMessage'    => $settings['welcome_message'],
+            'sessionTimeout'    => \AI_Elementor_Addon\Conversation_Store::SESSION_TIMEOUT,
+            'sessionExpiredText'=> $settings['inactivity_message'],
         ];
         ?>
-        <div class="ai-chat-widget" data-settings='<?php echo esc_attr( wp_json_encode( $data ) ); ?>'>
+        <div class="ai-chat-widget" data-widget-id="<?php echo esc_attr( $this->get_id() ); ?>" data-settings='<?php echo esc_attr( wp_json_encode( $data ) ); ?>'>
             <div class="ai-chat-header">
                 <h3>
                     <?php if ( ! empty( $settings['chat_icon'] ) ) : ?>
