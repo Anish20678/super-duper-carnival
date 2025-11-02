@@ -17,6 +17,14 @@
     overflow: hidden;
 }
 
+.ai-chat-widget--no-header .ai-chat-header {
+    display: none;
+}
+
+.ai-chat-widget--no-prompts .ai-chat-quick-prompts {
+    display: none;
+}
+
 .ai-chat-header {
     display: flex;
     align-items: center;
@@ -44,6 +52,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    justify-content: flex-start;
 }
 
 .ai-chat-quick-prompt {
@@ -62,6 +71,11 @@
     background: rgba(26, 115, 232, 0.15);
     color: #0b5cd7;
     transform: translateY(-1px);
+}
+
+.ai-chat-quick-prompt:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
 }
 
 .ai-chat-window {

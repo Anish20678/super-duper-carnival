@@ -173,6 +173,10 @@
     }
 
     function getStoredSession(storageKey) {
+        if (!storageKey) {
+            return null;
+        }
+
         try {
             return window.localStorage.getItem(storageKey);
         } catch (e) {
@@ -181,6 +185,10 @@
     }
 
     function storeSession(storageKey, sessionId) {
+        if (!storageKey) {
+            return;
+        }
+
         try {
             if (sessionId) {
                 window.localStorage.setItem(storageKey, sessionId);
@@ -214,6 +222,10 @@
             quickPrompts: [],
             autoSend: true,
             typingText: 'Assistant is thinking…',
+            enableTypingIndicator: true,
+            persistSession: true,
+            emptyInputMessage: '',
+            displayQuickPrompts: true,
             widgetId: '',
             welcomeMessage: '',
             sessionTimeout: DEFAULT_SESSION_TIMEOUT,
@@ -224,7 +236,8 @@
             settings.quickPrompts = [];
         }
 
-        var storageKey = STORAGE_PREFIX + (settings.widgetId || $widget.closest('.elementor-element').data('id') || 'global');
+        var persistSession = settings.persistSession !== false;
+        var storageKey = persistSession ? STORAGE_PREFIX + (settings.widgetId || $widget.closest('.elementor-element').data('id') || 'global') : null;
         var $window = $widget.find('.ai-chat-window');
         var $textarea = $widget.find('textarea');
         var $sendButton = $widget.find('.ai-chat-send');
@@ -326,7 +339,9 @@
                     temperature: settings.temperature,
                     beforeSend: function(){
                         $sendButton.prop('disabled', true).addClass('is-loading');
-                        typingBubble = appendAssistantMessage($window, settings.typingText || 'Assistant is thinking…', { extraClass: 'is-typing', isHtml: false });
+                        if (settings.enableTypingIndicator) {
+                            typingBubble = appendAssistantMessage($window, settings.typingText || 'Assistant is thinking…', { extraClass: 'is-typing', isHtml: false });
+                        }
                         scrollToBottom($window);
                     },
                     onSuccess: function(responseMessage, data){
@@ -373,6 +388,9 @@
             var message = ($textarea.val() || '').trim();
 
             if (!message) {
+                if (settings.emptyInputMessage) {
+                    appendAssistantMessage($window, settings.emptyInputMessage, { isHtml: false });
+                }
                 $textarea.focus();
                 return;
             }
