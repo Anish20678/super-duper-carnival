@@ -1,9 +1,14 @@
 (function($){
+    var STORAGE_PREFIX = 'AIElementorSession::';
+    var DEFAULT_SESSION_TIMEOUT = (window.AIElementorAddon && parseInt(window.AIElementorAddon.timeout, 10)) || (7 * 60);
+
     function sendRequest(options) {
         var settings = $.extend({
             mode: 'chat',
             model: '',
             payload: '',
+            message: '',
+            sessionId: '',
             temperature: null,
             beforeSend: function(){},
             onSuccess: function(){},
@@ -13,12 +18,12 @@
 
         if (!window.AIElementorAddon || !AIElementorAddon.ajaxUrl) {
             settings.onError('AI endpoint not available.');
-            return;
+            return $.Deferred().reject('missing-endpoint').promise();
         }
 
         settings.beforeSend();
 
-        $.ajax({
+        return $.ajax({
             url: AIElementorAddon.ajaxUrl,
             method: 'POST',
             dataType: 'json',
@@ -28,26 +33,51 @@
                 mode: settings.mode,
                 model: settings.model,
                 payload: settings.payload,
+                session_id: settings.sessionId,
+                message: settings.message,
                 temperature: settings.temperature != null ? settings.temperature : ''
             }
         }).done(function(response){
-            if (response && response.success && response.data && response.data.message) {
-                settings.onSuccess(response.data.message);
+            if (response && response.success && response.data) {
+                var message = response.data.message || '';
+                settings.onSuccess(message, response.data);
             } else {
                 var message = response && response.data && response.data.message ? response.data.message : 'Unknown response from AI service.';
-                settings.onError(message);
+                settings.onError(message, response && response.data ? response.data : null);
             }
         }).fail(function(xhr){
-            var message = xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ? xhr.responseJSON.data.message : 'Request failed.';
-            settings.onError(message);
+            var data = xhr && xhr.responseJSON ? xhr.responseJSON.data : null;
+            var message = data && data.message ? data.message : 'Request failed.';
+            settings.onError(message, data);
         }).always(function(){
             settings.afterSend();
         });
     }
 
-    function scrollToBottom($container) {
+    function startSessionRequest(params) {
+        if (!window.AIElementorAddon || !AIElementorAddon.ajaxUrl) {
+            return $.Deferred().reject('missing-endpoint').promise();
+        }
+
+        return $.ajax({
+            url: AIElementorAddon.ajaxUrl,
+            method: 'POST',
+            dataType: 'json',
+            data: $.extend({
+                action: 'ai_elementor_start_session',
+                nonce: AIElementorAddon.nonce
+            }, params || {})
+        });
+    }
+
+    function scrollToBottom($container, immediate) {
         var el = $container.get(0);
         if (!el) {
+            return;
+        }
+
+        if (immediate) {
+            el.scrollTop = el.scrollHeight;
             return;
         }
 
@@ -89,140 +119,335 @@
         return $('<div/>').html(formatAssistantMessage(message)).text();
     }
 
-    function ensureHistory($widget) {
-        var history = $widget.data('history');
-        if (!Array.isArray(history)) {
-            history = [];
-            $widget.data('history', history);
+    function appendAssistantMessage($window, message, opts) {
+        var options = $.extend({ skipScroll: false, extraClass: '', isHtml: true }, opts || {});
+        var content = options.isHtml ? message : formatAssistantMessage(message);
+        var $bubble = createBubble('assistant', content, { extraClass: options.extraClass, isHtml: true });
+        $window.append($bubble);
+
+        if (!options.skipScroll) {
+            scrollToBottom($window);
         }
 
-        return history;
+        return $bubble;
     }
 
-    function buildChatPayload(history, prompt) {
-        var lines = [];
+    function appendUserMessage($window, message, opts) {
+        var options = $.extend({ skipScroll: false }, opts || {});
+        var $bubble = createBubble('user', message, { isHtml: false });
+        $window.append($bubble);
 
-        if (prompt) {
-            lines.push('System: ' + prompt);
+        if (!options.skipScroll) {
+            scrollToBottom($window);
         }
 
-        $.each(history, function(_, entry){
-            if (!entry || !entry.role || !entry.content) {
+        return $bubble;
+    }
+
+    function renderHistory($widget, $window, settings, history) {
+        $window.empty();
+
+        var displayHistory = Array.isArray(history) ? history : [];
+        var normalised = [];
+
+        if (!displayHistory.length && settings.welcomeMessage) {
+            appendAssistantMessage($window, settings.welcomeMessage, { skipScroll: true, isHtml: false });
+        }
+
+        $.each(displayHistory, function(_, entry){
+            if (!entry || !entry.role) {
                 return;
             }
 
-            var role = entry.role.charAt(0).toUpperCase() + entry.role.slice(1);
-            lines.push(role + ': ' + entry.content);
-        });
-
-        return lines.join('\n');
-    }
-
-    function appendAssistantMessage($window, message) {
-        var formatted = formatAssistantMessage(message);
-        $window.append(createBubble('assistant', formatted, { isHtml: true }));
-        scrollToBottom($window);
-    }
-
-    function appendUserMessage($window, message) {
-        $window.append(createBubble('user', message, { isHtml: false }));
-        scrollToBottom($window);
-    }
-
-    $(document).on('click', '.ai-chat-send', function(){
-        var $button = $(this);
-        var $widget = $button.closest('.ai-chat-widget');
-        var $textarea = $widget.find('textarea');
-        var $window = $widget.find('.ai-chat-window');
-        var settings = $widget.data('settings') || {};
-        var message = ($textarea.val() || '').trim();
-
-        if (!message) {
-            $textarea.focus();
-            return;
-        }
-
-        if ($button.data('api-key') !== 'set') {
-            appendAssistantMessage($window, 'OpenAI API key is missing. Please add it in the plugin settings.');
-            return;
-        }
-
-        var history = ensureHistory($widget);
-
-        appendUserMessage($window, message);
-        history.push({ role: 'user', content: message });
-        $textarea.val('');
-
-        var typingBubble;
-
-        sendRequest({
-            mode: 'chat',
-            model: settings.model,
-            payload: buildChatPayload(history, settings.prompt),
-            temperature: settings.temperature,
-            beforeSend: function(){
-                $button.prop('disabled', true).addClass('is-loading');
-                var typingText = settings.typingText || 'Assistant is thinking…';
-                typingBubble = createBubble('assistant', typingText, { extraClass: 'is-typing', isHtml: false });
-                $window.append(typingBubble);
-                scrollToBottom($window);
-            },
-            onSuccess: function(responseMessage){
-                if (typingBubble) {
-                    typingBubble.remove();
-                }
-
-                appendAssistantMessage($window, responseMessage);
-                history.push({ role: 'assistant', content: normaliseMessage(responseMessage) });
-            },
-            onError: function(errorMessage){
-                if (typingBubble) {
-                    typingBubble.remove();
-                }
-
-                appendAssistantMessage($window, errorMessage || 'Request failed.');
-            },
-            afterSend: function(){
-                $button.prop('disabled', false).removeClass('is-loading');
-                scrollToBottom($window);
+            if (entry.role === 'assistant') {
+                appendAssistantMessage($window, entry.content, { skipScroll: true, isHtml: true });
+                normalised.push({ role: 'assistant', content: normaliseMessage(entry.content) });
+            } else if (entry.role === 'user') {
+                appendUserMessage($window, entry.content, { skipScroll: true });
+                normalised.push({ role: 'user', content: entry.content });
             }
         });
-    });
 
-    $(document).on('keydown', '.ai-chat-input textarea', function(event){
-        if (event.key !== 'Enter' || event.shiftKey) {
+        $widget.data('history', normalised);
+        scrollToBottom($window, true);
+    }
+
+    function getStoredSession(storageKey) {
+        try {
+            return window.localStorage.getItem(storageKey);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function storeSession(storageKey, sessionId) {
+        try {
+            if (sessionId) {
+                window.localStorage.setItem(storageKey, sessionId);
+            } else {
+                window.localStorage.removeItem(storageKey);
+            }
+        } catch (e) {
+            // Ignore storage failures.
+        }
+    }
+
+    function initialiseChatWidget($widget) {
+        if ($widget.data('aiChatInitialised')) {
             return;
         }
 
-        var $widget = $(this).closest('.ai-chat-widget');
-        var settings = $widget.data('settings') || {};
+        var rawSettings = $widget.attr('data-settings') || '{}';
+        var parsedSettings = {};
 
-        if (settings.enterToSend) {
-            event.preventDefault();
-            $widget.find('.ai-chat-send').trigger('click');
+        try {
+            parsedSettings = JSON.parse(rawSettings);
+        } catch (e) {
+            parsedSettings = {};
         }
-    });
 
-    $(document).on('click', '.ai-chat-quick-prompt', function(){
-        var $chip = $(this);
-        var $widget = $chip.closest('.ai-chat-widget');
-        var settings = $widget.data('settings') || {};
-        var text = $.trim($chip.text());
+        var settings = $.extend({
+            model: '',
+            temperature: 0.6,
+            prompt: '',
+            enterToSend: true,
+            quickPrompts: [],
+            autoSend: true,
+            typingText: 'Assistant is thinking…',
+            widgetId: '',
+            welcomeMessage: '',
+            sessionTimeout: DEFAULT_SESSION_TIMEOUT,
+            sessionExpiredText: 'The chat session expired due to inactivity. Starting a new conversation.',
+        }, parsedSettings || {});
+
+        if (!Array.isArray(settings.quickPrompts)) {
+            settings.quickPrompts = [];
+        }
+
+        var storageKey = STORAGE_PREFIX + (settings.widgetId || $widget.closest('.elementor-element').data('id') || 'global');
+        var $window = $widget.find('.ai-chat-window');
         var $textarea = $widget.find('textarea');
+        var $sendButton = $widget.find('.ai-chat-send');
+        var currentSessionId = null;
+        var inactivityTimer = null;
+        var pendingSessionRequest = null;
 
-        if (!text) {
-            return;
+        function resetInactivityTimer() {
+            if (inactivityTimer) {
+                clearTimeout(inactivityTimer);
+            }
+
+            var timeout = parseInt(settings.sessionTimeout, 10);
+            if (!timeout) {
+                return;
+            }
+
+            inactivityTimer = setTimeout(function(){
+                handleSessionExpired(true);
+            }, timeout * 1000);
         }
 
-        $textarea.val(text);
-
-        if (settings.autoSend) {
-            $widget.find('.ai-chat-send').trigger('click');
-        } else {
-            $textarea.focus();
+        function handleSessionExpired(autoMessage) {
+            storeSession(storageKey, '');
+            currentSessionId = null;
+            $widget.data('history', []);
+            if (autoMessage) {
+                appendAssistantMessage($window, settings.sessionExpiredText, { isHtml: false });
+            }
         }
+
+        function applySessionResponse(data) {
+            currentSessionId = data.sessionId;
+            storeSession(storageKey, currentSessionId);
+            renderHistory($widget, $window, settings, data.history || []);
+            resetInactivityTimer();
+        }
+
+        function initialiseSession(existingId) {
+            if (pendingSessionRequest) {
+                return pendingSessionRequest;
+            }
+
+            pendingSessionRequest = startSessionRequest({
+                session_id: existingId || '',
+                widget_id: settings.widgetId || '',
+                prompt_context: settings.prompt || '',
+                page_url: window.location.href,
+                referrer: document.referrer || ''
+            }).done(function(response){
+                if (response && response.success && response.data) {
+                    applySessionResponse(response.data);
+                } else {
+                    currentSessionId = null;
+                    $widget.data('history', []);
+                    renderHistory($widget, $window, settings, []);
+                }
+            }).fail(function(){
+                currentSessionId = null;
+            }).always(function(){
+                pendingSessionRequest = null;
+            });
+
+            return pendingSessionRequest;
+        }
+
+        function ensureSession() {
+            if (currentSessionId) {
+                return $.Deferred().resolve(currentSessionId).promise();
+            }
+
+            var stored = getStoredSession(storageKey);
+            return initialiseSession(stored).then(function(){
+                return currentSessionId;
+            });
+        }
+
+        function pushHistory(role, content) {
+            var history = $widget.data('history');
+            if (!Array.isArray(history)) {
+                history = [];
+            }
+
+            history.push({ role: role, content: content });
+            $widget.data('history', history);
+        }
+
+        function sendChatMessage(message) {
+            var deferred = $.Deferred();
+
+            ensureSession().done(function(sessionId){
+                var typingBubble;
+
+                sendRequest({
+                    mode: 'chat',
+                    model: settings.model,
+                    sessionId: sessionId,
+                    message: message,
+                    temperature: settings.temperature,
+                    beforeSend: function(){
+                        $sendButton.prop('disabled', true).addClass('is-loading');
+                        typingBubble = appendAssistantMessage($window, settings.typingText || 'Assistant is thinking…', { extraClass: 'is-typing', isHtml: false });
+                        scrollToBottom($window);
+                    },
+                    onSuccess: function(responseMessage, data){
+                        if (typingBubble) {
+                            typingBubble.remove();
+                        }
+
+                        appendAssistantMessage($window, responseMessage, { isHtml: true });
+                        pushHistory('assistant', normaliseMessage(responseMessage));
+                        if (data && data.history) {
+                            renderHistory($widget, $window, settings, data.history);
+                        }
+                        resetInactivityTimer();
+                        deferred.resolve(responseMessage, data);
+                    },
+                    onError: function(errorMessage, data){
+                        if (typingBubble) {
+                            typingBubble.remove();
+                        }
+
+                        if (data && data.code === 'session_expired') {
+                            appendAssistantMessage($window, errorMessage, { isHtml: false });
+                            handleSessionExpired(false);
+                        } else {
+                            appendAssistantMessage($window, errorMessage || 'Request failed.', { isHtml: false });
+                        }
+
+                        deferred.reject(errorMessage, data);
+                    },
+                    afterSend: function(){
+                        $sendButton.prop('disabled', false).removeClass('is-loading');
+                        scrollToBottom($window);
+                    }
+                });
+            }).fail(function(){
+                appendAssistantMessage($window, 'Unable to connect to the AI assistant. Please try again shortly.', { isHtml: false });
+                deferred.reject();
+            });
+
+            return deferred.promise();
+        }
+
+        function handleSend() {
+            var message = ($textarea.val() || '').trim();
+
+            if (!message) {
+                $textarea.focus();
+                return;
+            }
+
+            if ($sendButton.data('api-key') !== 'set') {
+                appendAssistantMessage($window, 'OpenAI API key is missing. Please add it in the plugin settings.', { isHtml: false });
+                return;
+            }
+
+            appendUserMessage($window, message);
+            pushHistory('user', message);
+            $textarea.val('');
+            resetInactivityTimer();
+
+            sendChatMessage(message);
+        }
+
+        $widget.off('.aiChat');
+
+        $widget.on('click.aiChat', '.ai-chat-send', function(){
+            handleSend();
+        });
+
+        $widget.on('keydown.aiChat', '.ai-chat-input textarea', function(event){
+            if (event.key !== 'Enter' || event.shiftKey) {
+                return;
+            }
+
+            if (settings.enterToSend) {
+                event.preventDefault();
+                handleSend();
+            }
+        });
+
+        $widget.on('click.aiChat', '.ai-chat-quick-prompt', function(){
+            var text = $.trim($(this).text());
+            if (!text) {
+                return;
+            }
+
+            $textarea.val(text);
+
+            if (settings.autoSend) {
+                handleSend();
+            } else {
+                $textarea.focus();
+            }
+        });
+
+        var storedSession = getStoredSession(storageKey);
+        initialiseSession(storedSession).always(function(){
+            if (!currentSessionId) {
+                // Ensure a session exists even if initial request failed.
+                initialiseSession('');
+            }
+        });
+
+        $widget.data('aiChatInitialised', true);
+    }
+
+    $(function(){
+        $('.ai-chat-widget').each(function(){
+            initialiseChatWidget($(this));
+        });
     });
 
+    if (window.elementorFrontend && window.elementorFrontend.hooks) {
+        elementorFrontend.hooks.addAction('frontend/element_ready/ai_chat.default', function($scope){
+            $scope.find('.ai-chat-widget').each(function(){
+                initialiseChatWidget($(this));
+            });
+        });
+    }
+
+    // Brainstorm widget handler remains delegated for simplicity.
     $(document).on('click', '.ai-brainstorm-generate', function(){
         var $button = $(this);
         var $widget = $button.closest('.ai-brainstorm-widget');

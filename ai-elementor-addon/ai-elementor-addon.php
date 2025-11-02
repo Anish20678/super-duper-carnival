@@ -1,9 +1,10 @@
 <?php
 /**
  * Plugin Name: AI Elementor Addon
+ * Plugin URI: https://www.envara.ae
  * Description: Adds AI-powered Elementor widgets with OpenAI integration and granular controls.
- * Version: 1.0.0
- * Author: OpenAI Assistant
+ * Version: 1.1.0
+ * Author: Envara Ventures LLC
  * Text Domain: ai-elementor-addon
  */
 
@@ -20,6 +21,7 @@ if ( ! defined( 'AI_ELEMENTOR_ADDON_URL' ) ) {
 }
 
 require_once AI_ELEMENTOR_ADDON_PATH . 'includes/class-ai-elementor-settings.php';
+require_once AI_ELEMENTOR_ADDON_PATH . 'includes/class-ai-elementor-conversation-store.php';
 require_once AI_ELEMENTOR_ADDON_PATH . 'includes/class-ai-elementor-addon.php';
 require_once AI_ELEMENTOR_ADDON_PATH . 'includes/class-ai-elementor-admin.php';
 require_once AI_ELEMENTOR_ADDON_PATH . 'includes/class-ai-elementor-ajax.php';
@@ -41,6 +43,7 @@ add_action( 'plugins_loaded', 'ai_elementor_addon_init' );
 
 // Initialize admin after plugins loaded to ensure settings exist.
 add_action( 'plugins_loaded', function() {
+    \AI_Elementor_Addon\Conversation_Store::ensure_tables_exist();
     new \AI_Elementor_Addon\Admin();
 } );
 
@@ -49,5 +52,7 @@ register_activation_hook( __FILE__, function() {
     if ( ! get_option( \AI_Elementor_Addon\Settings::OPTION_KEY ) ) {
         \AI_Elementor_Addon\Settings::update_settings( [] );
     }
+
+    \AI_Elementor_Addon\Conversation_Store::create_tables();
 } );
 

@@ -109,14 +109,14 @@ class Plugin {
             'ai-elementor-addon',
             AI_ELEMENTOR_ADDON_URL . 'assets/css/frontend.css',
             [],
-            '1.0.0'
+            '1.1.0'
         );
 
         wp_register_script(
             'ai-elementor-addon',
             AI_ELEMENTOR_ADDON_URL . 'assets/js/frontend.js',
             [ 'jquery' ],
-            '1.0.0',
+            '1.1.0',
             true
         );
 
@@ -126,6 +126,7 @@ class Plugin {
             [
                 'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                 'nonce'   => wp_create_nonce( 'ai-elementor-addon' ),
+                'timeout' => \AI_Elementor_Addon\Conversation_Store::SESSION_TIMEOUT,
             ]
         );
     }
