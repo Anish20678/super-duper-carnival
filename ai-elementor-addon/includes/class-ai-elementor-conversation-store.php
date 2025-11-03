@@ -341,6 +341,37 @@ class Conversation_Store {
     }
 
     /**
+     * Count messages for a given role within a conversation.
+     *
+     * @param int    $conversation_id Conversation identifier.
+     * @param string $role            Message role.
+     *
+     * @return int
+     */
+    public static function count_messages_by_role( $conversation_id, $role ) {
+        global $wpdb;
+
+        self::ensure_tables_exist();
+
+        $conversation_id = (int) $conversation_id;
+
+        if ( ! $conversation_id ) {
+            return 0;
+        }
+
+        $table = self::get_table_name( self::MESSAGES_TABLE );
+        $role  = \sanitize_key( $role );
+
+        return (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$table} WHERE conversation_id = %d AND role = %s",
+                $conversation_id,
+                $role
+            )
+        );
+    }
+
+    /**
      * Determine if conversation is expired.
      *
      * @param object $conversation

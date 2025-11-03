@@ -31,6 +31,8 @@ class Ajax {
         $message     = isset( $_POST['message'] ) ? wp_unslash( $_POST['message'] ) : '';
         $model       = isset( $_POST['model'] ) ? sanitize_text_field( wp_unslash( $_POST['model'] ) ) : '';
         $temperature = isset( $_POST['temperature'] ) ? floatval( wp_unslash( $_POST['temperature'] ) ) : null;
+        $notification_raw = isset( $_POST['notification'] ) ? wp_unslash( $_POST['notification'] ) : '';
+        $notification_settings = self::parse_notification_settings( $notification_raw );
 
         $config = Plugin::get_ai_configuration();
 
@@ -120,6 +122,8 @@ class Ajax {
             );
         }
 
+        $existing_user_messages = Conversation_Store::count_messages_by_role( (int) $conversation->id, 'user' );
+
         Conversation_Store::add_message( (int) $conversation->id, 'user', $message );
 
         $history      = Conversation_Store::get_messages( (int) $conversation->id );
@@ -164,6 +168,10 @@ class Ajax {
         }
 
         Conversation_Store::add_message( (int) $conversation->id, 'assistant', $text );
+
+        if ( $notification_settings['enabled'] && 0 === $existing_user_messages ) {
+            self::dispatch_notification( $conversation, $message, $notification_settings );
+        }
 
         $history_output = Conversation_Store::get_history_for_output( (int) $conversation->id );
         $conversation   = Conversation_Store::get_conversation_by_session( $session_id );
@@ -246,6 +254,174 @@ class Ajax {
             default:
                 return $payload;
         }
+    }
+
+    /**
+     * Normalise notification data posted from the widget.
+     *
+     * @param string|array $raw_settings Raw notification settings from the request.
+     *
+     * @return array
+     */
+    private static function parse_notification_settings( $raw_settings ) {
+        $defaults = [
+            'enabled'  => false,
+            'to'       => '',
+            'subject'  => '',
+            'fromName' => '',
+            'from'     => '',
+            'replyTo'  => '',
+            'cc'       => '',
+            'bcc'      => '',
+        ];
+
+        if ( empty( $raw_settings ) ) {
+            return $defaults;
+        }
+
+        $decoded = is_array( $raw_settings ) ? $raw_settings : json_decode( $raw_settings, true );
+
+        if ( ! is_array( $decoded ) ) {
+            return $defaults;
+        }
+
+        $settings = array_merge( $defaults, $decoded );
+
+        $settings['enabled']  = ! empty( $settings['enabled'] );
+        $settings['to']       = isset( $settings['to'] ) ? \sanitize_text_field( $settings['to'] ) : '';
+        $settings['subject']  = isset( $settings['subject'] ) ? \sanitize_text_field( $settings['subject'] ) : '';
+        $settings['fromName'] = isset( $settings['fromName'] ) ? \sanitize_text_field( $settings['fromName'] ) : '';
+        $settings['from']     = isset( $settings['from'] ) ? \sanitize_email( $settings['from'] ) : '';
+        $settings['replyTo']  = isset( $settings['replyTo'] ) ? \sanitize_email( $settings['replyTo'] ) : '';
+        $settings['cc']       = isset( $settings['cc'] ) ? \sanitize_text_field( $settings['cc'] ) : '';
+        $settings['bcc']      = isset( $settings['bcc'] ) ? \sanitize_text_field( $settings['bcc'] ) : '';
+
+        return $settings;
+    }
+
+    /**
+     * Send the configured notification when the first message arrives.
+     *
+     * @param object $conversation Conversation model.
+     * @param string $message      First visitor message.
+     * @param array  $settings     Parsed notification settings.
+     */
+    private static function dispatch_notification( $conversation, $message, array $settings ) {
+        if ( empty( $settings['enabled'] ) ) {
+            return;
+        }
+
+        $recipients = self::parse_recipient_list( $settings['to'] );
+
+        if ( empty( $recipients ) ) {
+            return;
+        }
+
+        $site_name = \get_bloginfo( 'name' );
+        $page_title = '';
+
+        if ( ! empty( $conversation->page_url ) ) {
+            $page_id = \url_to_postid( $conversation->page_url );
+
+            if ( $page_id ) {
+                $page = \get_post( $page_id );
+
+                if ( $page ) {
+                    $page_title = $page->post_title;
+                }
+            }
+        }
+
+        $subject_template = ! empty( $settings['subject'] ) ? $settings['subject'] : __( 'New AI chat from {site_name}', 'ai-elementor-addon' );
+        $replacements      = [
+            '{site_name}'  => $site_name,
+            '{session_id}' => $conversation ? $conversation->session_id : '',
+            '{page_title}' => $page_title,
+        ];
+
+        $subject = strtr( $subject_template, $replacements );
+
+        $lines = [];
+        $lines[] = sprintf( __( 'A new AI chat conversation has started on %s.', 'ai-elementor-addon' ), $site_name );
+        $lines[] = '';
+        $lines[] = __( 'First visitor message:', 'ai-elementor-addon' );
+        $lines[] = trim( \wp_strip_all_tags( $message ) );
+        $lines[] = '';
+
+        if ( ! empty( $conversation->page_url ) ) {
+            $lines[] = sprintf( __( 'Page: %s', 'ai-elementor-addon' ), $conversation->page_url );
+        }
+
+        if ( ! empty( $page_title ) ) {
+            $lines[] = sprintf( __( 'Page title: %s', 'ai-elementor-addon' ), $page_title );
+        }
+
+        if ( ! empty( $conversation->visitor_ip ) ) {
+            $lines[] = sprintf( __( 'Visitor IP: %s', 'ai-elementor-addon' ), $conversation->visitor_ip );
+        }
+
+        if ( ! empty( $conversation->user_agent ) ) {
+            $lines[] = sprintf( __( 'User agent: %s', 'ai-elementor-addon' ), $conversation->user_agent );
+        }
+
+        if ( ! empty( $conversation->referer ) ) {
+            $lines[] = sprintf( __( 'Referrer: %s', 'ai-elementor-addon' ), $conversation->referer );
+        }
+
+        $lines[] = sprintf( __( 'Session ID: %s', 'ai-elementor-addon' ), $conversation ? $conversation->session_id : '' );
+        $lines[] = sprintf( __( 'Started at: %s', 'ai-elementor-addon' ), $conversation ? $conversation->created_at : current_time( 'mysql' ) );
+
+        $body = implode( "\n", array_filter( $lines ) );
+
+        $headers = [ 'Content-Type: text/plain; charset=UTF-8' ];
+
+        if ( ! empty( $settings['from'] ) ) {
+            $from_name = $settings['fromName'] ? $settings['fromName'] : $site_name;
+            $headers[] = sprintf( 'From: %s <%s>', $from_name, $settings['from'] );
+        }
+
+        if ( ! empty( $settings['replyTo'] ) && \is_email( $settings['replyTo'] ) ) {
+            $headers[] = 'Reply-To: ' . $settings['replyTo'];
+        }
+
+        $cc  = self::parse_recipient_list( $settings['cc'] );
+        $bcc = self::parse_recipient_list( $settings['bcc'] );
+
+        if ( ! empty( $cc ) ) {
+            $headers[] = 'Cc: ' . implode( ', ', $cc );
+        }
+
+        if ( ! empty( $bcc ) ) {
+            $headers[] = 'Bcc: ' . implode( ', ', $bcc );
+        }
+
+        \wp_mail( $recipients, $subject, $body, $headers );
+    }
+
+    /**
+     * Parse a comma separated list of email addresses.
+     *
+     * @param string|array $list Email addresses.
+     *
+     * @return array
+     */
+    private static function parse_recipient_list( $list ) {
+        if ( empty( $list ) ) {
+            return [];
+        }
+
+        $items = is_array( $list ) ? $list : explode( ',', $list );
+        $emails = [];
+
+        foreach ( $items as $item ) {
+            $email = trim( $item );
+
+            if ( $email && \is_email( $email ) ) {
+                $emails[] = $email;
+            }
+        }
+
+        return array_values( array_unique( $emails ) );
     }
 }
 
