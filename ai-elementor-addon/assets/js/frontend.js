@@ -10,6 +10,7 @@
             message: '',
             sessionId: '',
             temperature: null,
+            notifications: null,
             beforeSend: function(){},
             onSuccess: function(){},
             onError: function(){},
@@ -35,7 +36,8 @@
                 payload: settings.payload,
                 session_id: settings.sessionId,
                 message: settings.message,
-                temperature: settings.temperature != null ? settings.temperature : ''
+                temperature: settings.temperature != null ? settings.temperature : '',
+                notification: settings.notifications ? JSON.stringify(settings.notifications) : ''
             }
         }).done(function(response){
             if (response && response.success && response.data) {
@@ -230,10 +232,16 @@
             welcomeMessage: '',
             sessionTimeout: DEFAULT_SESSION_TIMEOUT,
             sessionExpiredText: 'The chat session expired due to inactivity. Starting a new conversation.',
+            notifications: null,
+            knowledgePages: []
         }, parsedSettings || {});
 
         if (!Array.isArray(settings.quickPrompts)) {
             settings.quickPrompts = [];
+        }
+
+        if (!Array.isArray(settings.knowledgePages)) {
+            settings.knowledgePages = [];
         }
 
         var persistSession = settings.persistSession !== false;
@@ -325,11 +333,68 @@
             $widget.data('history', history);
         }
 
+        function findRelevantPage(pages, content) {
+            if (!Array.isArray(pages) || !pages.length || !content) {
+                return null;
+            }
+
+            var target = String(content).toLowerCase();
+
+            for (var i = 0; i < pages.length; i++) {
+                var page = pages[i];
+
+                if (!page) {
+                    continue;
+                }
+
+                var title = page.title ? String(page.title).toLowerCase() : '';
+                var slug = page.slug ? String(page.slug).toLowerCase() : '';
+
+                if (title && target.indexOf(title) !== -1) {
+                    return page;
+                }
+
+                if (slug && target.indexOf(slug) !== -1) {
+                    return page;
+                }
+            }
+
+            return null;
+        }
+
+        function appendReference($bubble, page) {
+            if (!$bubble || !$bubble.length || !page || !page.url) {
+                return;
+            }
+
+            if ($bubble.find('.ai-chat-reference').length) {
+                return;
+            }
+
+            if ($bubble.find('a[href="' + page.url + '"]').length) {
+                return;
+            }
+
+            var $reference = $('<span/>', { 'class': 'ai-chat-reference' });
+            var $link = $('<a/>', {
+                text: page.title || page.url,
+                href: page.url,
+                target: '_blank',
+                rel: 'noopener'
+            });
+
+            $reference.append(document.createTextNode('For more details you can visit the '));
+            $reference.append($link);
+            $reference.append(document.createTextNode(' page.'));
+            $bubble.append($reference);
+        }
+
         function sendChatMessage(message) {
             var deferred = $.Deferred();
 
             ensureSession().done(function(sessionId){
                 var typingBubble;
+                var originalMessage = message;
 
                 sendRequest({
                     mode: 'chat',
@@ -337,6 +402,7 @@
                     sessionId: sessionId,
                     message: message,
                     temperature: settings.temperature,
+                    notifications: settings.notifications,
                     beforeSend: function(){
                         $sendButton.prop('disabled', true).addClass('is-loading');
                         if (settings.enableTypingIndicator) {
@@ -349,10 +415,23 @@
                             typingBubble.remove();
                         }
 
-                        appendAssistantMessage($window, responseMessage, { isHtml: true });
+                        var $assistantBubble = appendAssistantMessage($window, responseMessage, { isHtml: true });
+                        var userQuery = originalMessage ? originalMessage.toLowerCase() : '';
+                        var matchedPage = findRelevantPage(settings.knowledgePages, userQuery);
+
+                        if (!matchedPage && responseMessage) {
+                            matchedPage = findRelevantPage(settings.knowledgePages, normaliseMessage(responseMessage));
+                        }
+
                         pushHistory('assistant', normaliseMessage(responseMessage));
                         if (data && data.history) {
                             renderHistory($widget, $window, settings, data.history);
+                            if (matchedPage) {
+                                var $latestAssistant = $window.find('.ai-chat-bubble--assistant').last();
+                                appendReference($latestAssistant, matchedPage);
+                            }
+                        } else if (matchedPage) {
+                            appendReference($assistantBubble, matchedPage);
                         }
                         resetInactivityTimer();
                         deferred.resolve(responseMessage, data);

@@ -57,16 +57,6 @@ class AI_Chat_Widget extends Widget_Base {
         );
 
         $this->add_control(
-            'chat_icon',
-            [
-                'label'       => __( 'Assistant Icon', 'ai-elementor-addon' ),
-                'type'        => Controls_Manager::TEXT,
-                'default'     => '🤖',
-                'description' => __( 'Shown before the title to add personality.', 'ai-elementor-addon' ),
-            ]
-        );
-
-        $this->add_control(
             'show_header',
             [
                 'label'        => __( 'Display Header', 'ai-elementor-addon' ),
@@ -75,6 +65,18 @@ class AI_Chat_Widget extends Widget_Base {
                 'label_off'    => __( 'Hide', 'ai-elementor-addon' ),
                 'return_value' => 'yes',
                 'default'      => 'yes',
+            ]
+        );
+
+        $this->add_control(
+            'assistant_avatar',
+            [
+                'label'       => __( 'Assistant Avatar', 'ai-elementor-addon' ),
+                'type'        => Controls_Manager::MEDIA,
+                'description' => __( 'Optional profile image displayed next to the title.', 'ai-elementor-addon' ),
+                'condition'   => [
+                    'show_header' => 'yes',
+                ],
             ]
         );
 
@@ -162,6 +164,18 @@ class AI_Chat_Widget extends Widget_Base {
             ]
         );
 
+        $this->add_control(
+            'knowledge_pages',
+            [
+                'label'        => __( 'Train With Site Pages', 'ai-elementor-addon' ),
+                'type'         => Controls_Manager::SELECT2,
+                'multiple'     => true,
+                'label_block'  => true,
+                'options'      => $this->get_available_pages_options(),
+                'description'  => __( 'Search and select published pages to feed as additional context for the assistant.', 'ai-elementor-addon' ),
+            ]
+        );
+
         $this->end_controls_section();
 
         $this->start_controls_section(
@@ -244,6 +258,110 @@ class AI_Chat_Widget extends Widget_Base {
                 'type'        => Controls_Manager::TEXT,
                 'default'     => __( 'Please enter a message before sending.', 'ai-elementor-addon' ),
                 'description' => __( 'Shown when the visitor tries to send a blank message.', 'ai-elementor-addon' ),
+            ]
+        );
+
+        $this->end_controls_section();
+
+        $this->start_controls_section(
+            'section_notifications',
+            [
+                'label' => __( 'Email Notifications', 'ai-elementor-addon' ),
+            ]
+        );
+
+        $this->add_control(
+            'notification_enable',
+            [
+                'label'        => __( 'Send Email On First Message', 'ai-elementor-addon' ),
+                'type'         => Controls_Manager::SWITCHER,
+                'label_on'     => __( 'Yes', 'ai-elementor-addon' ),
+                'label_off'    => __( 'No', 'ai-elementor-addon' ),
+                'return_value' => 'yes',
+                'default'      => 'yes',
+                'description'  => __( 'Sends a notification email as soon as the visitor sends their first chat message.', 'ai-elementor-addon' ),
+            ]
+        );
+
+        $this->add_control(
+            'notification_to',
+            [
+                'label'       => __( 'To', 'ai-elementor-addon' ),
+                'type'        => Controls_Manager::TEXT,
+                'placeholder' => \get_bloginfo( 'admin_email' ),
+                'description' => __( 'Enter one or more email addresses separated by commas.', 'ai-elementor-addon' ),
+                'condition'   => [
+                    'notification_enable' => 'yes',
+                ],
+            ]
+        );
+
+        $this->add_control(
+            'notification_subject',
+            [
+                'label'       => __( 'Subject', 'ai-elementor-addon' ),
+                'type'        => Controls_Manager::TEXT,
+                'default'     => __( 'New AI chat from {site_name}', 'ai-elementor-addon' ),
+                'condition'   => [
+                    'notification_enable' => 'yes',
+                ],
+            ]
+        );
+
+        $this->add_control(
+            'notification_from_name',
+            [
+                'label'       => __( 'From Name', 'ai-elementor-addon' ),
+                'type'        => Controls_Manager::TEXT,
+                'placeholder' => \get_bloginfo( 'name' ),
+                'condition'   => [
+                    'notification_enable' => 'yes',
+                ],
+            ]
+        );
+
+        $this->add_control(
+            'notification_from_email',
+            [
+                'label'       => __( 'From Email', 'ai-elementor-addon' ),
+                'type'        => Controls_Manager::TEXT,
+                'placeholder' => \get_bloginfo( 'admin_email' ),
+                'condition'   => [
+                    'notification_enable' => 'yes',
+                ],
+            ]
+        );
+
+        $this->add_control(
+            'notification_reply_to',
+            [
+                'label'     => __( 'Reply To', 'ai-elementor-addon' ),
+                'type'      => Controls_Manager::TEXT,
+                'condition' => [
+                    'notification_enable' => 'yes',
+                ],
+            ]
+        );
+
+        $this->add_control(
+            'notification_cc',
+            [
+                'label'     => __( 'Cc', 'ai-elementor-addon' ),
+                'type'      => Controls_Manager::TEXT,
+                'condition' => [
+                    'notification_enable' => 'yes',
+                ],
+            ]
+        );
+
+        $this->add_control(
+            'notification_bcc',
+            [
+                'label'     => __( 'Bcc', 'ai-elementor-addon' ),
+                'type'      => Controls_Manager::TEXT,
+                'condition' => [
+                    'notification_enable' => 'yes',
+                ],
             ]
         );
 
@@ -497,15 +615,35 @@ class AI_Chat_Widget extends Widget_Base {
         );
 
         $this->add_control(
+            'chat_window_height_mode',
+            [
+                'label'       => __( 'Height Preset', 'ai-elementor-addon' ),
+                'type'        => Controls_Manager::SELECT,
+                'options'     => [
+                    ''     => __( 'Custom', 'ai-elementor-addon' ),
+                    'fit'  => __( 'Fit To Screen', 'ai-elementor-addon' ),
+                ],
+                'default'     => '',
+                'description' => __( 'Select “Fit To Screen” to stretch the chat between the header and the input area.', 'ai-elementor-addon' ),
+            ]
+        );
+
+        $this->add_control(
             'chat_window_height',
             [
-                'label' => __( 'Chat Window Max Height', 'ai-elementor-addon' ),
-                'type'  => Controls_Manager::SLIDER,
-                'range' => [
-                    'px' => [ 'min' => 160, 'max' => 640 ],
+                'label'      => __( 'Chat Window Max Height', 'ai-elementor-addon' ),
+                'type'       => Controls_Manager::SLIDER,
+                'size_units' => [ 'px', '%', 'vh', 'em', 'rem' ],
+                'range'      => [
+                    'px' => [ 'min' => 160, 'max' => 960 ],
+                    '%'  => [ 'min' => 10, 'max' => 100 ],
+                    'vh' => [ 'min' => 10, 'max' => 100 ],
                 ],
-                'selectors' => [
+                'selectors'  => [
                     '{{WRAPPER}} .ai-chat-window' => 'max-height: {{SIZE}}{{UNIT}};',
+                ],
+                'condition'  => [
+                    'chat_window_height_mode!' => 'fit',
                 ],
             ]
         );
@@ -513,13 +651,19 @@ class AI_Chat_Widget extends Widget_Base {
         $this->add_control(
             'chat_window_min_height',
             [
-                'label' => __( 'Chat Window Min Height', 'ai-elementor-addon' ),
-                'type'  => Controls_Manager::SLIDER,
-                'range' => [
+                'label'      => __( 'Chat Window Min Height', 'ai-elementor-addon' ),
+                'type'       => Controls_Manager::SLIDER,
+                'size_units' => [ 'px', '%', 'vh', 'em', 'rem' ],
+                'range'      => [
                     'px' => [ 'min' => 120, 'max' => 640 ],
+                    '%'  => [ 'min' => 10, 'max' => 100 ],
+                    'vh' => [ 'min' => 10, 'max' => 100 ],
                 ],
-                'selectors' => [
+                'selectors'  => [
                     '{{WRAPPER}} .ai-chat-window' => 'min-height: {{SIZE}}{{UNIT}};',
+                ],
+                'condition'  => [
+                    'chat_window_height_mode!' => 'fit',
                 ],
             ]
         );
@@ -529,13 +673,19 @@ class AI_Chat_Widget extends Widget_Base {
             [
                 'label'       => __( 'Fixed Chat Height', 'ai-elementor-addon' ),
                 'type'        => Controls_Manager::SLIDER,
+                'size_units'  => [ 'px', '%', 'vh', 'em', 'rem' ],
                 'range'       => [
                     'px' => [ 'min' => 160, 'max' => 800 ],
+                    '%'  => [ 'min' => 10, 'max' => 100 ],
+                    'vh' => [ 'min' => 10, 'max' => 100 ],
                 ],
                 'selectors'   => [
                     '{{WRAPPER}} .ai-chat-window' => 'height: {{SIZE}}{{UNIT}};',
                 ],
                 'description' => __( 'Sets an explicit height for the chat area when required.', 'ai-elementor-addon' ),
+                'condition'   => [
+                    'chat_window_height_mode!' => 'fit',
+                ],
             ]
         );
 
@@ -1219,6 +1369,14 @@ class AI_Chat_Widget extends Widget_Base {
             $quick_prompts = [];
         }
 
+        $selected_page_ids = [];
+
+        if ( ! empty( $settings['knowledge_pages'] ) && is_array( $settings['knowledge_pages'] ) ) {
+            $selected_page_ids = array_map( 'absint', $settings['knowledge_pages'] );
+        }
+
+        $page_context = $this->build_pages_context( $selected_page_ids );
+
         $prompt_parts = [];
 
         if ( ! empty( $settings['prompt_context'] ) ) {
@@ -1245,10 +1403,39 @@ class AI_Chat_Widget extends Widget_Base {
             }
         }
 
+        if ( ! empty( $page_context ) ) {
+            $compiled_pages = [];
+
+            foreach ( $page_context as $page ) {
+                $compiled_pages[] = sprintf(
+                    "%s\nURL: %s\nSummary: %s",
+                    $page['title'],
+                    $page['url'],
+                    $page['excerpt']
+                );
+            }
+
+            $prompt_parts[] = __( 'Site knowledge base:', 'ai-elementor-addon' ) . "\n\n" . implode( "\n\n", $compiled_pages );
+            $prompt_parts[] = __( 'When a visitor asks about these pages, include rich HTML in your responses (bold, italics, lists) and finish with a sentence linking to the most relevant page using an anchor tag.', 'ai-elementor-addon' );
+        } else {
+            $prompt_parts[] = __( 'Respond using helpful HTML formatting (paragraphs, bold, italics, links) whenever it improves clarity.', 'ai-elementor-addon' );
+        }
+
         $compiled_prompt = trim( implode( "\n\n", array_filter( $prompt_parts ) ) );
 
         $enable_typing_indicator = isset( $settings['enable_typing_indicator'] ) ? 'yes' === $settings['enable_typing_indicator'] : true;
         $persist_session         = isset( $settings['persist_session'] ) ? 'yes' === $settings['persist_session'] : true;
+
+        $notifications = [
+            'enabled'  => isset( $settings['notification_enable'] ) ? 'yes' === $settings['notification_enable'] : false,
+            'to'       => isset( $settings['notification_to'] ) ? \sanitize_text_field( $settings['notification_to'] ) : '',
+            'subject'  => isset( $settings['notification_subject'] ) ? \sanitize_text_field( $settings['notification_subject'] ) : '',
+            'fromName' => isset( $settings['notification_from_name'] ) ? \sanitize_text_field( $settings['notification_from_name'] ) : '',
+            'from'     => isset( $settings['notification_from_email'] ) ? \sanitize_email( $settings['notification_from_email'] ) : '',
+            'replyTo'  => isset( $settings['notification_reply_to'] ) ? \sanitize_email( $settings['notification_reply_to'] ) : '',
+            'cc'       => isset( $settings['notification_cc'] ) ? \sanitize_text_field( $settings['notification_cc'] ) : '',
+            'bcc'      => isset( $settings['notification_bcc'] ) ? \sanitize_text_field( $settings['notification_bcc'] ) : '',
+        ];
 
         $data = [
             'model'                  => $configuration['default_model'],
@@ -1266,6 +1453,8 @@ class AI_Chat_Widget extends Widget_Base {
             'sessionTimeout'         => \AI_Elementor_Addon\Conversation_Store::SESSION_TIMEOUT,
             'sessionExpiredText'     => isset( $settings['inactivity_message'] ) ? $settings['inactivity_message'] : '',
             'displayQuickPrompts'    => $should_display_prompts,
+            'notifications'          => $notifications,
+            'knowledgePages'         => array_values( $page_context ),
         ];
 
         $wrapper_classes = [ 'ai-chat-widget' ];
@@ -1278,24 +1467,23 @@ class AI_Chat_Widget extends Widget_Base {
             $wrapper_classes[] = 'ai-chat-widget--no-header';
         }
 
+        if ( ! empty( $settings['chat_window_height_mode'] ) && 'fit' === $settings['chat_window_height_mode'] ) {
+            $wrapper_classes[] = 'ai-chat-widget--fit-screen';
+        }
+
         $wrapper_classnames = array_map( 'sanitize_html_class', $wrapper_classes );
         ?>
         <div class="<?php echo esc_attr( implode( ' ', $wrapper_classnames ) ); ?>" data-widget-id="<?php echo esc_attr( $this->get_id() ); ?>" data-settings='<?php echo esc_attr( wp_json_encode( $data ) ); ?>'>
             <?php if ( ! empty( $settings['show_header'] ) && 'yes' === $settings['show_header'] ) : ?>
                 <div class="ai-chat-header">
+                    <?php if ( ! empty( $settings['assistant_avatar']['url'] ) ) : ?>
+                        <span class="ai-chat-avatar">
+                            <img src="<?php echo esc_url( $settings['assistant_avatar']['url'] ); ?>" alt="" />
+                        </span>
+                    <?php endif; ?>
                     <h3>
-                        <?php if ( ! empty( $settings['chat_icon'] ) ) : ?>
-                            <span class="ai-chat-icon" aria-hidden="true"><?php echo esc_html( $settings['chat_icon'] ); ?></span>
-                        <?php endif; ?>
                         <span class="ai-chat-title-text"><?php echo isset( $settings['chat_title'] ) ? esc_html( $settings['chat_title'] ) : ''; ?></span>
                     </h3>
-                </div>
-            <?php endif; ?>
-            <?php if ( ! empty( $quick_prompts ) ) : ?>
-                <div class="ai-chat-quick-prompts" role="list">
-                    <?php foreach ( $quick_prompts as $prompt ) : ?>
-                        <button type="button" class="ai-chat-quick-prompt" role="listitem"><?php echo esc_html( $prompt ); ?></button>
-                    <?php endforeach; ?>
                 </div>
             <?php endif; ?>
             <div class="ai-chat-window">
@@ -1303,6 +1491,13 @@ class AI_Chat_Widget extends Widget_Base {
                     <?php echo isset( $settings['welcome_message'] ) ? esc_html( $settings['welcome_message'] ) : ''; ?>
                 </div>
             </div>
+            <?php if ( ! empty( $quick_prompts ) ) : ?>
+                <div class="ai-chat-quick-prompts" role="list">
+                    <?php foreach ( $quick_prompts as $prompt ) : ?>
+                        <button type="button" class="ai-chat-quick-prompt" role="listitem"><?php echo esc_html( $prompt ); ?></button>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
             <div class="ai-chat-input">
                 <label class="screen-reader-text" for="ai-chat-prompt-<?php echo esc_attr( $this->get_id() ); ?>"><?php esc_html_e( 'Message', 'ai-elementor-addon' ); ?></label>
                 <textarea id="ai-chat-prompt-<?php echo esc_attr( $this->get_id() ); ?>" placeholder="<?php echo isset( $settings['placeholder_text'] ) ? esc_attr( $settings['placeholder_text'] ) : ''; ?>"></textarea>
@@ -1312,6 +1507,66 @@ class AI_Chat_Widget extends Widget_Base {
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * Retrieve a list of published pages for selection controls.
+     *
+     * @return array
+     */
+    private function get_available_pages_options() {
+        $pages = \get_pages(
+            [
+                'sort_column' => 'post_title',
+                'post_status' => 'publish',
+                'number'      => 200,
+            ]
+        );
+
+        if ( empty( $pages ) || ! is_array( $pages ) ) {
+            return [];
+        }
+
+        $options = [];
+
+        foreach ( $pages as $page ) {
+            $options[ $page->ID ] = $page->post_title;
+        }
+
+        return $options;
+    }
+
+    /**
+     * Build an array of page context to embed into prompts and JS settings.
+     *
+     * @param array $page_ids Page identifiers selected in the editor.
+     *
+     * @return array[]
+     */
+    private function build_pages_context( array $page_ids ) {
+        $context = [];
+
+        foreach ( $page_ids as $page_id ) {
+            $post = \get_post( $page_id );
+
+            if ( ! $post || 'publish' !== $post->post_status ) {
+                continue;
+            }
+
+            $url     = \get_permalink( $post );
+            $excerpt = $post->post_excerpt ? $post->post_excerpt : \wp_strip_all_tags( $post->post_content );
+            $excerpt = \wp_trim_words( $excerpt, 80, '…' );
+
+            $context[] = [
+                'id'      => (int) $post->ID,
+                'title'   => $post->post_title,
+                'url'     => $url ? \esc_url_raw( $url ) : '',
+                'excerpt' => $excerpt,
+                'slug'    => $post->post_name,
+            ];
+        }
+
+        return $context;
     }
 }
 
